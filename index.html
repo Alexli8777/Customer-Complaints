@@ -53,19 +53,6 @@
         #downloadLink:hover {
             text-decoration: underline;
         }
-        #previewTable {
-            margin-top: 20px;
-            width: 100%;
-            border-collapse: collapse;
-        }
-        #previewTable th, #previewTable td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        #previewTable th {
-            background-color: #f2f2f2;
-        }
         .loading {
             display: none;
             margin-top: 10px;
@@ -80,7 +67,6 @@
         <button onclick="processFile()">處理並下載結果</button>
         <p class="loading" id="loading">處理中...</p>
         <a id="downloadLink" href="#" download="統計結果.xlsx">下載統計結果</a>
-        <table id="previewTable"></table>
     </div>
 
     <script>
@@ -94,7 +80,6 @@
 
             document.getElementById('loading').style.display = 'block';
             document.getElementById('downloadLink').style.display = 'none';
-            document.getElementById('previewTable').innerHTML = '';
 
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -107,56 +92,85 @@
                 // 找到欄位索引 (基於 row3)
                 const headers = jsonData[2]; // row3 是索引 2
                 const salesNameIndex = headers.indexOf('業務姓名');
+                const additionalInfoIndex = headers.indexOf('附加資訊');
                 const ticketNameIndex = headers.indexOf('工單完整名稱');
 
-                if (salesNameIndex === -1 || ticketNameIndex === -1) {
-                    alert('無法找到必要的欄位：業務姓名 或 工單完整名稱');
+                if (salesNameIndex === -1 || additionalInfoIndex === -1 || ticketNameIndex === -1) {
+                    alert('無法找到必要的欄位');
                     document.getElementById('loading').style.display = 'none';
                     return;
                 }
 
-                // 收集數據，從 row4 開始 (索引 3)
-                const stats = {};
+                // 第一個統計：業務姓名
+                const salesStats = {};
+                // 第二個統計：店組代號和加盟門市
+                const storeStats = {};
+
+                // 從 row4 開始 (索引 3)
                 for (let i = 3; i < jsonData.length; i++) {
                     const row = jsonData[i];
                     const salesName = row[salesNameIndex];
+                    const additionalInfo = row[additionalInfoIndex] || '';
                     const ticketName = row[ticketNameIndex];
 
+                    // 業務姓名統計
                     if (salesName) {
-                        if (!stats[salesName]) {
-                            stats[salesName] = { total: 0, salesCount: 0 };
+                        if (!salesStats[salesName]) {
+                            salesStats[salesName] = { total: 0, salesCount: 0 };
                         }
-                        stats[salesName].total++;
+                        salesStats[salesName].total++;
                         if (ticketName === '銷售相關問題' || 
                             ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議' || 
                             ticketName === '辦門號換現金') {
-                            stats[salesName].salesCount++;
+                            salesStats[salesName].salesCount++;
+                        }
+                    }
+
+                    // 店組統計
+                    let storeCode = '';
+                    let storeName = '';
+                    const storeCodeMatch = additionalInfo.match(/店組代號.*:\s*(180\d{4})/);
+                    if (storeCodeMatch) {
+                        storeCode = storeCodeMatch[1];
+                    }
+                    const storeNameMatch = additionalInfo.match(/店組代號.*:\s*180\d{4}\s*(.+?)(?=\n|4\.|$)/);
+                    if (storeNameMatch) {
+                        storeName = storeNameMatch[1].trim();
+                    }
+
+                    if (storeCode) {
+                        const key = storeCode + '|' + storeName;
+                        if (!storeStats[key]) {
+                            storeStats[key] = { total: 0, salesCount: 0, storeCode, storeName };
+                        }
+                        storeStats[key].total++;
+                        if (ticketName === '銷售相關問題' || 
+                            ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議' || 
+                            ticketName === '辦門號換現金') {
+                            storeStats[key].salesCount++;
                         }
                     }
                 }
 
-                // 準備結果數據
-                const resultData = [['業務姓名', '總筆數', '銷售類工單筆數']];
-                for (const name in stats) {
-                    resultData.push([name, stats[name].total, stats[name].salesCount]);
+                // 準備業務統計數據 (Sheet1)
+                const salesData = [['業務姓名', '總筆數', '銷售類工單筆數']];
+                for (const name in salesStats) {
+                    salesData.push([name, salesStats[name].total, salesStats[name].salesCount]);
                 }
 
-                // 預覽表格
-                const previewTable = document.getElementById('previewTable');
-                resultData.forEach(row => {
-                    const tr = document.createElement('tr');
-                    row.forEach(cell => {
-                        const td = document.createElement(row === resultData[0] ? 'th' : 'td');
-                        td.textContent = cell;
-                        tr.appendChild(td);
-                    });
-                    previewTable.appendChild(tr);
-                });
+                // 準備店組統計數據 (Sheet2)
+                const storeData = [['店組代號', '加盟門市', '總筆數', '銷售類工單筆數']];
+                for (const key in storeStats) {
+                    const item = storeStats[key];
+                    storeData.push([item.storeCode, item.storeName, item.total, item.salesCount]);
+                }
 
                 // 生成新 Excel
-                const resultSheet = XLSX.utils.aoa_to_sheet(resultData);
                 const resultWorkbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(resultWorkbook, resultSheet, '統計結果');
+                const salesSheet = XLSX.utils.aoa_to_sheet(salesData);
+                XLSX.utils.book_append_sheet(resultWorkbook, salesSheet, '業務統計');
+                const storeSheet = XLSX.utils.aoa_to_sheet(storeData);
+                XLSX.utils.book_append_sheet(resultWorkbook, storeSheet, '店組統計');
 
                 // 生成二進制數據
                 const wbout = XLSX.write(resultWorkbook, { bookType: 'xlsx', type: 'binary' });
