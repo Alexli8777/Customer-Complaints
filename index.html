@@ -33,62 +33,79 @@
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: "array" });
 
-        // 預設讀取第一個工作表
+        // 讀取來源檔的第一個分頁
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-        // 統計 X 欄位 (業務姓名件數)
-        let salesCount = {};
+        // 銷售相關問題關鍵字
+        const keywords = ["(加盟)辦A給B", "盜辦", "特殊身份辦理爭議", "銷售相關問題", "辦門號換現金"];
+
+        // 分頁一：依 X 欄(業務姓名)統計
+        let salesStats = {};
         jsonData.forEach(row => {
           const name = row["X"]?.toString().trim();
-          if (name) {
-            salesCount[name] = (salesCount[name] || 0) + 1;
-          }
-        });
+          const ai = row["AI"]?.toString().trim();
 
-        // 統計 AI 欄 (銷售相關問題件數)
-        const keywords = ["(加盟)辦A給B", "盜辦", "特殊身份辦理爭議", "銷售相關問題", "辦門號換現金"];
-        let aiCount = 0;
-        jsonData.forEach(row => {
-          const ai = row["AI"]?.toString();
+          if (!name) return;
+
+          if (!salesStats[name]) {
+            salesStats[name] = { total: 0, issue: 0 };
+          }
+
+          salesStats[name].total++;
           if (ai && keywords.some(k => ai.includes(k))) {
-            aiCount++;
+            salesStats[name].issue++;
           }
         });
 
-        // AM 欄：只保留「數字+門市名稱」，並做分類 (依分頁三 B欄對應)
-        let storeData = {};
+        const ws1Data = Object.entries(salesStats).map(([name, obj]) => ({
+          "業務姓名": name,
+          "工單總筆數": obj.total,
+          "銷售相關問題件數": obj.issue
+        }));
+
+        // 分頁二：依 AM 欄(門市代碼+名稱)統計
+        let storeStats = {};
         jsonData.forEach(row => {
-          let store = row["AM"]?.toString().trim();
-          if (store) {
-            // 只取「數字+名稱」
-            store = store.replace("%", ""); 
-            // 模擬分類 (這裡先假設依開頭代碼分區，實務上應該要讀取第3個分頁 B欄)
-            let category = "其他";
-            if (store.startsWith("180")) category = "北區";
-            else if (store.startsWith("181")) category = "中區";
-            else if (store.startsWith("182")) category = "南區";
-            storeData[category] = (storeData[category] || 0) + 1;
+          let am = row["AM"]?.toString().trim();
+          const ai = row["AI"]?.toString().trim();
+
+          if (!am || am.length < 8) return;
+
+          const code = am.substring(0, 7); // 前7碼
+          const name = am.substring(7).trim(); // 後面名稱
+          const key = code + " " + name;
+
+          if (!storeStats[key]) {
+            storeStats[key] = { code, name, total: 0, issue: 0 };
+          }
+
+          storeStats[key].total++;
+          if (ai && keywords.some(k => ai.includes(k))) {
+            storeStats[key].issue++;
           }
         });
+
+        const ws2Data = Object.values(storeStats).map(obj => ({
+          "7位數代碼": obj.code,
+          "加盟門市名稱": obj.name,
+          "工單總筆數": obj.total,
+          "銷售相關問題件數": obj.issue
+        }));
 
         // === 產生成果檔 ===
         const wb = XLSX.utils.book_new();
 
-        // Sheet1: 業務姓名統計
-        const ws1 = XLSX.utils.json_to_sheet(Object.entries(salesCount).map(([k, v]) => ({ 業務姓名: k, 件數: v })));
-        XLSX.utils.book_append_sheet(wb, ws1, "業務姓名統計");
+        // Sheet1: 業務統計
+        const ws1 = XLSX.utils.json_to_sheet(ws1Data);
+        XLSX.utils.book_append_sheet(wb, ws1, "業務統計");
 
-        // Sheet2: AI 銷售相關問題
-        const ws2 = XLSX.utils.json_to_sheet([{ "銷售相關問題件數": aiCount }]);
-        XLSX.utils.book_append_sheet(wb, ws2, "銷售問題統計");
+        // Sheet2: 門市統計
+        const ws2 = XLSX.utils.json_to_sheet(ws2Data);
+        XLSX.utils.book_append_sheet(wb, ws2, "門市統計");
 
-        // Sheet3: AM 分類統計
-        const ws3 = XLSX.utils.json_to_sheet(Object.entries(storeData).map(([k, v]) => ({ 區域: k, 件數: v })));
-        XLSX.utils.book_append_sheet(wb, ws3, "門市區域統計");
-
-        // 轉檔並下載
+        // 下載按鈕
         document.getElementById("download").style.display = "inline-block";
         document.getElementById("download").onclick = function() {
           XLSX.writeFile(wb, "工單目標檔.xlsx");
