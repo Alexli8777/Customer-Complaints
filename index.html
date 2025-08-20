@@ -36,16 +36,44 @@
         // 讀取來源檔的第一個分頁
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "", header: 1 });
+
+        if (jsonData.length === 0) {
+          alert("來源檔是空的！");
+          return;
+        }
+
+        // 標題列
+        const headers = jsonData[0];
+        const rows = jsonData.slice(1);
+
+        // 自動找欄位名稱
+        function findColumn(keywordList) {
+          for (let i = 0; i < headers.length; i++) {
+            if (keywordList.some(k => headers[i].toString().includes(k))) {
+              return i;
+            }
+          }
+          return -1;
+        }
+
+        const colX = findColumn(["業務", "X"]);     // 業務姓名
+        const colAI = findColumn(["AI", "銷售", "問題"]); // AI 欄位
+        const colAM = findColumn(["AM", "門市", "加盟"]); // AM 欄位
+
+        if (colX === -1 || colAI === -1 || colAM === -1) {
+          alert("找不到必要的欄位（業務姓名 / AI / AM）");
+          return;
+        }
 
         // 銷售相關問題關鍵字
         const keywords = ["(加盟)辦A給B", "盜辦", "特殊身份辦理爭議", "銷售相關問題", "辦門號換現金"];
 
-        // 分頁一：依 X 欄(業務姓名)統計
+        // 分頁一：依業務姓名統計
         let salesStats = {};
-        jsonData.forEach(row => {
-          const name = row["X"]?.toString().trim();
-          const ai = row["AI"]?.toString().trim();
+        rows.forEach(r => {
+          const name = r[colX]?.toString().trim();
+          const ai = r[colAI]?.toString().trim();
 
           if (!name) return;
 
@@ -65,11 +93,11 @@
           "銷售相關問題件數": obj.issue
         }));
 
-        // 分頁二：依 AM 欄(門市代碼+名稱)統計
+        // 分頁二：依門市統計
         let storeStats = {};
-        jsonData.forEach(row => {
-          let am = row["AM"]?.toString().trim();
-          const ai = row["AI"]?.toString().trim();
+        rows.forEach(r => {
+          let am = r[colAM]?.toString().trim();
+          const ai = r[colAI]?.toString().trim();
 
           if (!am || am.length < 8) return;
 
