@@ -1,71 +1,184 @@
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th>業務姓名</th>
-      <th>登記總筆數</th>
-      <th>銷售類工單筆數</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>廖芷儀</td>
-      <td>3</td>
-      <td>2</td>
-    </tr>
-    <tr>
-      <td>廖軒志</td>
-      <td>10</td>
-      <td>7</td>
-    </tr>
-    <tr>
-      <td>易大為</td>
-      <td>7</td>
-      <td>6</td>
-    </tr>
-    <tr>
-      <td>李家文</td>
-      <td>5</td>
-      <td>1</td>
-    </tr>
-    <tr>
-      <td>李心泰</td>
-      <td>9</td>
-      <td>7</td>
-    </tr>
-    <tr>
-      <td>林雅雯</td>
-      <td>7</td>
-      <td>5</td>
-    </tr>
-    <tr>
-      <td>楊家能</td>
-      <td>8</td>
-      <td>6</td>
-    </tr>
-    <tr>
-      <td>楊皓彬</td>
-      <td>14</td>
-      <td>9</td>
-    </tr>
-    <tr>
-      <td>楊蕙羽</td>
-      <td>5</td>
-      <td>3</td>
-    </tr>
-    <tr>
-      <td>謝珮芬</td>
-      <td>5</td>
-      <td>4</td>
-    </tr>
-    <tr>
-      <td>賴弘倫</td>
-      <td>6</td>
-      <td>4</td>
-    </tr>
-    <tr>
-      <td>黃宗南</td>
-      <td>2</td>
-      <td>1</td>
-    </tr>
-  </tbody>
-</table>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 統計工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 400px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #downloadLink {
+            display: none;
+            margin-top: 20px;
+            text-decoration: none;
+            color: #007BFF;
+            font-weight: bold;
+        }
+        #downloadLink:hover {
+            text-decoration: underline;
+        }
+        #previewTable {
+            margin-top: 20px;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #previewTable th, #previewTable td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        #previewTable th {
+            background-color: #f2f2f2;
+        }
+        .loading {
+            display: none;
+            margin-top: 10px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>上傳 Excel 檔進行統計</h1>
+        <input type="file" id="fileInput" accept=".xlsx">
+        <button onclick="processFile()">處理並下載結果</button>
+        <p class="loading" id="loading">處理中...</p>
+        <a id="downloadLink" href="#" download="統計結果.xlsx">下載統計結果</a>
+        <table id="previewTable"></table>
+    </div>
+
+    <script>
+        function processFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('請選擇一個 Excel 檔');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('downloadLink').style.display = 'none';
+            document.getElementById('previewTable').innerHTML = '';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                // 找到欄位索引 (基於 row3)
+                const headers = jsonData[2]; // row3 是索引 2
+                const salesNameIndex = headers.indexOf('業務姓名');
+                const ticketNameIndex = headers.indexOf('工單完整名稱');
+
+                if (salesNameIndex === -1 || ticketNameIndex === -1) {
+                    alert('無法找到必要的欄位：業務姓名 或 工單完整名稱');
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+
+                // 收集數據，從 row4 開始 (索引 3)
+                const stats = {};
+                for (let i = 3; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    const salesName = row[salesNameIndex];
+                    const ticketName = row[ticketNameIndex];
+
+                    if (salesName) {
+                        if (!stats[salesName]) {
+                            stats[salesName] = { total: 0, salesCount: 0 };
+                        }
+                        stats[salesName].total++;
+                        if (ticketName === '銷售相關問題' || 
+                            ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議' || 
+                            ticketName === '辦門號換現金') {
+                            stats[salesName].salesCount++;
+                        }
+                    }
+                }
+
+                // 準備結果數據
+                const resultData = [['業務姓名', '總筆數', '銷售類工單筆數']];
+                for (const name in stats) {
+                    resultData.push([name, stats[name].total, stats[name].salesCount]);
+                }
+
+                // 預覽表格
+                const previewTable = document.getElementById('previewTable');
+                resultData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    row.forEach(cell => {
+                        const td = document.createElement(row === resultData[0] ? 'th' : 'td');
+                        td.textContent = cell;
+                        tr.appendChild(td);
+                    });
+                    previewTable.appendChild(tr);
+                });
+
+                // 生成新 Excel
+                const resultSheet = XLSX.utils.aoa_to_sheet(resultData);
+                const resultWorkbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(resultWorkbook, resultSheet, '統計結果');
+
+                // 生成二進制數據
+                const wbout = XLSX.write(resultWorkbook, { bookType: 'xlsx', type: 'binary' });
+
+                function s2ab(s) {
+                    const buf = new ArrayBuffer(s.length);
+                    const view = new Uint8Array(buf);
+                    for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+                    return buf;
+                }
+
+                const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+
+                const downloadLink = document.getElementById('downloadLink');
+                downloadLink.href = url;
+                downloadLink.style.display = 'block';
+
+                document.getElementById('loading').style.display = 'none';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
