@@ -116,12 +116,23 @@
                     // 業務姓名統計
                     if (salesName) {
                         if (!salesStats[salesName]) {
-                            salesStats[salesName] = { total: 0, salesCount: 0 };
+                            salesStats[salesName] = { 
+                                total: 0, 
+                                salesCount: 0,
+                                count_sales_problem: 0,
+                                count_franchise_dispute: 0,
+                                count_exchange_cash: 0
+                            };
                         }
                         salesStats[salesName].total++;
-                        if (ticketName === '銷售相關問題' || 
-                            ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議' || 
-                            ticketName === '辦門號換現金') {
+                        if (ticketName === '銷售相關問題') {
+                            salesStats[salesName].count_sales_problem++;
+                            salesStats[salesName].salesCount++;
+                        } else if (ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議') {
+                            salesStats[salesName].count_franchise_dispute++;
+                            salesStats[salesName].salesCount++;
+                        } else if (ticketName === '辦門號換現金') {
+                            salesStats[salesName].count_exchange_cash++;
                             salesStats[salesName].salesCount++;
                         }
                     }
@@ -141,28 +152,42 @@
                     if (storeCode) {
                         const key = storeCode + '|' + storeName;
                         if (!storeStats[key]) {
-                            storeStats[key] = { total: 0, salesCount: 0, storeCode, storeName };
+                            storeStats[key] = { 
+                                total: 0, 
+                                salesCount: 0,
+                                count_sales_problem: 0,
+                                count_franchise_dispute: 0,
+                                count_exchange_cash: 0,
+                                storeCode, 
+                                storeName 
+                            };
                         }
                         storeStats[key].total++;
-                        if (ticketName === '銷售相關問題' || 
-                            ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議' || 
-                            ticketName === '辦門號換現金') {
+                        if (ticketName === '銷售相關問題') {
+                            storeStats[key].count_sales_problem++;
+                            storeStats[key].salesCount++;
+                        } else if (ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議') {
+                            storeStats[key].count_franchise_dispute++;
+                            storeStats[key].salesCount++;
+                        } else if (ticketName === '辦門號換現金') {
+                            storeStats[key].count_exchange_cash++;
                             storeStats[key].salesCount++;
                         }
                     }
                 }
 
                 // 準備業務統計數據 (Sheet1)
-                const salesData = [['業務姓名', '總筆數', '銷售類工單筆數']];
+                const salesData = [['業務姓名', '總筆數', '銷售類工單筆數', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '辦門號換現金筆數']];
                 for (const name in salesStats) {
-                    salesData.push([name, salesStats[name].total, salesStats[name].salesCount]);
+                    const item = salesStats[name];
+                    salesData.push([name, item.total, item.salesCount, item.count_sales_problem, item.count_franchise_dispute, item.count_exchange_cash]);
                 }
 
                 // 準備店組統計數據 (Sheet2)
-                const storeData = [['店組代號', '加盟門市', '總筆數', '銷售類工單筆數']];
+                const storeData = [['店組代號', '加盟門市', '總筆數', '銷售類工單筆數', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '辦門號換現金筆數']];
                 for (const key in storeStats) {
                     const item = storeStats[key];
-                    storeData.push([item.storeCode, item.storeName, item.total, item.salesCount]);
+                    storeData.push([item.storeCode, item.storeName, item.total, item.salesCount, item.count_sales_problem, item.count_franchise_dispute, item.count_exchange_cash]);
                 }
 
                 // 生成新 Excel
