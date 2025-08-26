@@ -102,7 +102,7 @@
                     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
                     // 找到欄位索引 (基於 row3)
-                    const headers = jsonData[2] || []; // row3 是索引 2
+                    const headers = jsonData[2] || [];
                     const salesNameIndex = headers.indexOf('業務姓名');
                     const additionalInfoIndex = headers.indexOf('附加資訊');
                     const ticketNameIndex = headers.indexOf('工單完整名稱');
@@ -150,10 +150,22 @@
                         // 店組統計
                         let storeCode = '';
                         let storeName = '未知門市'; // 預設值，避免空白
-                        const storeMatch = additionalInfo.match(/(180\d{4})\s*([^\n,]+(?:\n[^\n,]+)*)/i); // 匹配 180XXXX 後的門市名稱，支持多行
+                        // 更靈活的正則表達式，匹配 180XXXX 後的任何非空字符，直到換行或逗號
+                        const storeMatch = additionalInfo.match(/(180\d{4})\s*([^,\n]+(?:\s+[^\n,]+)*)/i);
                         if (storeMatch) {
                             storeCode = storeMatch[1];
-                            storeName = storeMatch[2].trim().split('\n')[0]; // 取第一行作為門市名稱
+                            storeName = storeMatch[2].trim().replace(/\s+/g, ' ').split('\n')[0]; // 清理多餘空格，取第一行
+                        } else {
+                            // 如果正則匹配失敗，嘗試直接搜索 180XXXX 格式
+                            const codeMatch = additionalInfo.match(/(180\d{4})/i);
+                            if (codeMatch) {
+                                storeCode = codeMatch[1];
+                                // 嘗試從後面提取門市名稱
+                                const nameMatch = additionalInfo.match(new RegExp(`${storeCode}\\s*([^,\n]+)`, 'i'));
+                                if (nameMatch) {
+                                    storeName = nameMatch[1].trim();
+                                }
+                            }
                         }
 
                         if (storeCode) {
@@ -180,6 +192,8 @@
                                 storeStats[key].count_exchange_cash++;
                                 storeStats[key].salesCount++;
                             }
+                        } else {
+                            console.log(`行 ${i + 1} 無法提取店組代碼: ${additionalInfo}`);
                         }
                     }
 
