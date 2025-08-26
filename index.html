@@ -58,11 +58,6 @@
             margin-top: 10px;
             color: #555;
         }
-        .error {
-            display: none;
-            margin-top: 10px;
-            color: #ff0000;
-        }
     </style>
 </head>
 <body>
@@ -71,7 +66,6 @@
         <input type="file" id="fileInput" accept=".xlsx">
         <button onclick="processFile()">處理並下載結果</button>
         <p class="loading" id="loading">處理中...</p>
-        <p class="error" id="errorMsg"></p>
         <a id="downloadLink" href="#" download="統計結果.xlsx">下載統計結果</a>
     </div>
 
@@ -84,162 +78,146 @@
                 return;
             }
 
-            const loading = document.getElementById('loading');
-            const downloadLink = document.getElementById('downloadLink');
-            const errorMsg = document.getElementById('errorMsg');
-            loading.style.display = 'block';
-            downloadLink.style.display = 'none';
-            errorMsg.style.display = 'none';
-            errorMsg.textContent = '';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('downloadLink').style.display = 'none';
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-                    // 找到欄位索引 (基於 row3)
-                    const headers = jsonData[2] || [];
-                    const salesNameIndex = headers.indexOf('業務姓名');
-                    const additionalInfoIndex = headers.indexOf('附加資訊');
-                    const ticketNameIndex = headers.indexOf('工單完整名稱');
+                // 找到欄位索引 (基於 row3)
+                const headers = jsonData[2]; // row3 是索引 2
+                const salesNameIndex = headers.indexOf('業務姓名');
+                const additionalInfoIndex = headers.indexOf('附加資訊');
+                const ticketNameIndex = headers.indexOf('工單完整名稱');
 
-                    if (salesNameIndex === -1 || additionalInfoIndex === -1 || ticketNameIndex === -1) {
-                        throw new Error('無法找到必要的欄位：業務姓名、附加資訊 或 工單完整名稱');
-                    }
-
-                    // 第一個統計：業務姓名
-                    const salesStats = {};
-                    // 第二個統計：店組代號和加盟門市
-                    const storeStats = {};
-
-                    // 從 row4 開始 (索引 3)
-                    for (let i = 3; i < jsonData.length; i++) {
-                        const row = jsonData[i] || [];
-                        const salesName = row[salesNameIndex];
-                        const additionalInfo = row[additionalInfoIndex] || '';
-                        const ticketName = row[ticketNameIndex];
-
-                        // 業務姓名統計
-                        if (salesName) {
-                            if (!salesStats[salesName]) {
-                                salesStats[salesName] = { 
-                                    total: 0, 
-                                    salesCount: 0,
-                                    count_sales_problem: 0,
-                                    count_franchise_dispute: 0,
-                                    count_exchange_cash: 0
-                                };
-                            }
-                            salesStats[salesName].total++;
-                            if (ticketName === '銷售相關問題') {
-                                salesStats[salesName].count_sales_problem++;
-                                salesStats[salesName].salesCount++;
-                            } else if (ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議') {
-                                salesStats[salesName].count_franchise_dispute++;
-                                salesStats[salesName].salesCount++;
-                            } else if (ticketName === '辦門號換現金') {
-                                salesStats[salesName].count_exchange_cash++;
-                                salesStats[salesName].salesCount++;
-                            }
-                        }
-
-                        // 店組統計
-                        let storeCode = '';
-                        let storeName = '未知門市'; // 預設值，避免空白
-                        // 更靈活的正則表達式，匹配 180XXXX 後的任何非空字符，直到換行或逗號
-                        const storeMatch = additionalInfo.match(/(180\d{4})\s*([^,\n]+(?:\s+[^\n,]+)*)/i);
-                        if (storeMatch) {
-                            storeCode = storeMatch[1];
-                            storeName = storeMatch[2].trim().replace(/\s+/g, ' ').split('\n')[0]; // 清理多餘空格，取第一行
-                        } else {
-                            // 如果正則匹配失敗，嘗試直接搜索 180XXXX 格式
-                            const codeMatch = additionalInfo.match(/(180\d{4})/i);
-                            if (codeMatch) {
-                                storeCode = codeMatch[1];
-                                // 嘗試從後面提取門市名稱
-                                const nameMatch = additionalInfo.match(new RegExp(`${storeCode}\\s*([^,\n]+)`, 'i'));
-                                if (nameMatch) {
-                                    storeName = nameMatch[1].trim();
-                                }
-                            }
-                        }
-
-                        if (storeCode) {
-                            const key = storeCode + '|' + storeName;
-                            if (!storeStats[key]) {
-                                storeStats[key] = { 
-                                    total: 0, 
-                                    salesCount: 0,
-                                    count_sales_problem: 0,
-                                    count_franchise_dispute: 0,
-                                    count_exchange_cash: 0,
-                                    storeCode, 
-                                    storeName 
-                                };
-                            }
-                            storeStats[key].total++;
-                            if (ticketName === '銷售相關問題') {
-                                storeStats[key].count_sales_problem++;
-                                storeStats[key].salesCount++;
-                            } else if (ticketName === '(加盟)辦A給B/盜辦/特殊身份辦理爭議') {
-                                storeStats[key].count_franchise_dispute++;
-                                storeStats[key].salesCount++;
-                            } else if (ticketName === '辦門號換現金') {
-                                storeStats[key].count_exchange_cash++;
-                                storeStats[key].salesCount++;
-                            }
-                        } else {
-                            console.log(`行 ${i + 1} 無法提取店組代碼: ${additionalInfo}`);
-                        }
-                    }
-
-                    // 準備業務統計數據 (Sheet1)
-                    const salesData = [['業務姓名', '總筆數', '銷售類工單筆數', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '辦門號換現金筆數']];
-                    for (const name in salesStats) {
-                        const item = salesStats[name];
-                        salesData.push([name, item.total, item.salesCount, item.count_sales_problem, item.count_franchise_dispute, item.count_exchange_cash]);
-                    }
-
-                    // 準備店組統計數據 (Sheet2)
-                    const storeData = [['店組代號', '加盟門市', '總筆數', '銷售類工單筆數', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '辦門號換現金筆數']];
-                    for (const key in storeStats) {
-                        const item = storeStats[key];
-                        storeData.push([item.storeCode, item.storeName, item.total, item.salesCount, item.count_sales_problem, item.count_franchise_dispute, item.count_exchange_cash]);
-                    }
-
-                    // 生成新 Excel
-                    const resultWorkbook = XLSX.utils.book_new();
-                    const salesSheet = XLSX.utils.aoa_to_sheet(salesData);
-                    XLSX.utils.book_append_sheet(resultWorkbook, salesSheet, '業務統計');
-                    const storeSheet = XLSX.utils.aoa_to_sheet(storeData);
-                    XLSX.utils.book_append_sheet(resultWorkbook, storeSheet, '店組統計');
-
-                    // 生成二進制數據
-                    const wbout = XLSX.write(resultWorkbook, { bookType: 'xlsx', type: 'binary' });
-
-                    function s2ab(s) {
-                        const buf = new ArrayBuffer(s.length);
-                        const view = new Uint8Array(buf);
-                        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-                        return buf;
-                    }
-
-                    const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
-                    const url = URL.createObjectURL(blob);
-
-                    downloadLink.href = url;
-                    downloadLink.style.display = 'block';
-                } catch (error) {
-                    errorMsg.style.display = 'block';
-                    errorMsg.textContent = `錯誤: ${error.message}`;
-                    console.error('處理錯誤:', error);
-                } finally {
-                    loading.style.display = 'none';
+                if (salesNameIndex === -1 || additionalInfoIndex === -1 || ticketNameIndex === -1) {
+                    alert('無法找到必要的欄位');
+                    document.getElementById('loading').style.display = 'none';
+                    return;
                 }
+
+                // 第一個統計：業務姓名
+                const salesStats = {};
+                // 第二個統計：店組代號和加盟門市
+                const storeStats = {};
+                // 第三個統計：店組代號和加盟門市的分類銷售統計
+                const storeDetailStats = {};
+
+                // 定義銷售類型
+                const salesTypes = {
+                    '銷售相關問題': 'type1',
+                    '(加盟)辦A給B/盜辦/特殊身份辦理爭議': 'type2',
+                    '辦門號換現金': 'type3'
+                };
+
+                // 從 row4 開始 (索引 3)
+                for (let i = 3; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    const salesName = row[salesNameIndex];
+                    const additionalInfo = row[additionalInfoIndex] || '';
+                    const ticketName = row[ticketNameIndex];
+
+                    // 業務姓名統計
+                    if (salesName) {
+                        if (!salesStats[salesName]) {
+                            salesStats[salesName] = { total: 0, salesCount: 0 };
+                        }
+                        salesStats[salesName].total++;
+                        if (ticketName in salesTypes) {
+                            salesStats[salesName].salesCount++;
+                        }
+                    }
+
+                    // 店組統計
+                    let storeCode = '';
+                    let storeName = '';
+                    const storeCodeMatch = additionalInfo.match(/店組代號.*:\s*(180\d{4})/);
+                    if (storeCodeMatch) {
+                        storeCode = storeCodeMatch[1];
+                    }
+                    const storeNameMatch = additionalInfo.match(/店組代號.*:\s*180\d{4}\s*(.+?)(?=\n|4\.|$)/);
+                    if (storeNameMatch) {
+                        storeName = storeNameMatch[1].trim();
+                    }
+
+                    if (storeCode) {
+                        const key = storeCode + '|' + storeName;
+                        if (!storeStats[key]) {
+                            storeStats[key] = { total: 0, salesCount: 0, storeCode, storeName };
+                        }
+                        storeStats[key].total++;
+                        if (ticketName in salesTypes) {
+                            storeStats[key].salesCount++;
+                        }
+
+                        // 分類銷售統計
+                        if (!storeDetailStats[key]) {
+                            storeDetailStats[key] = {
+                                type1: 0,
+                                type2: 0,
+                                type3: 0,
+                                storeCode,
+                                storeName
+                            };
+                        }
+                        if (ticketName in salesTypes) {
+                            storeDetailStats[key][salesTypes[ticketName]]++;
+                        }
+                    }
+                }
+
+                // 準備業務統計數據 (Sheet1)
+                const salesData = [['業務姓名', '總筆數', '銷售類工單筆數']];
+                for (const name in salesStats) {
+                    salesData.push([name, salesStats[name].total, salesStats[name].salesCount]);
+                }
+
+                // 準備店組統計數據 (Sheet2)
+                const storeData = [['店組代號', '加盟門市', '總筆數', '銷售類工單筆數']];
+                for (const key in storeStats) {
+                    const item = storeStats[key];
+                    storeData.push([item.storeCode, item.storeName, item.total, item.salesCount]);
+                }
+
+                // 準備店組分類統計數據 (Sheet3)
+                const storeDetailData = [['店組代號', '加盟門市', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '辦門號換現金筆數']];
+                for (const key in storeDetailStats) {
+                    const item = storeDetailStats[key];
+                    storeDetailData.push([item.storeCode, item.storeName, item.type1, item.type2, item.type3]);
+                }
+
+                // 生成新 Excel
+                const resultWorkbook = XLSX.utils.book_new();
+                const salesSheet = XLSX.utils.aoa_to_sheet(salesData);
+                XLSX.utils.book_append_sheet(resultWorkbook, salesSheet, '業務統計');
+                const storeSheet = XLSX.utils.aoa_to_sheet(storeData);
+                XLSX.utils.book_append_sheet(resultWorkbook, storeSheet, '店組統計');
+                const storeDetailSheet = XLSX.utils.aoa_to_sheet(storeDetailData);
+                XLSX.utils.book_append_sheet(resultWorkbook, storeDetailSheet, '店組分類統計');
+
+                // 生成二進制數據
+                const wbout = XLSX.write(resultWorkbook, { bookType: 'xlsx', type: 'binary' });
+
+                function s2ab(s) {
+                    const buf = new ArrayBuffer(s.length);
+                    const view = new Uint8Array(buf);
+                    for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+                    return buf;
+                }
+
+                const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+
+                const downloadLink = document.getElementById('downloadLink');
+                downloadLink.href = url;
+                downloadLink.style.display = 'block';
+
+                document.getElementById('loading').style.display = 'none';
             };
             reader.readAsArrayBuffer(file);
         }
