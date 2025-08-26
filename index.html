@@ -92,10 +92,11 @@
                 // 找到欄位索引 (基於 row3)
                 const headers = jsonData[2]; // row3 是索引 2
                 const salesNameIndex = headers.indexOf('業務姓名');
-                const additionalInfoIndex = headers.indexOf('附加資訊');
+                const storeCodeIndex = headers.indexOf('店組代號'); // 假設為獨立欄位
+                const storeNameIndex = headers.indexOf('加盟門市'); // 假設為獨立欄位
                 const ticketNameIndex = headers.indexOf('工單完整名稱');
 
-                if (salesNameIndex === -1 || additionalInfoIndex === -1 || ticketNameIndex === -1) {
+                if (salesNameIndex === -1 || storeCodeIndex === -1 || storeNameIndex === -1 || ticketNameIndex === -1) {
                     alert('無法找到必要的欄位');
                     document.getElementById('loading').style.display = 'none';
                     return;
@@ -110,7 +111,8 @@
                 for (let i = 3; i < jsonData.length; i++) {
                     const row = jsonData[i];
                     const salesName = row[salesNameIndex];
-                    const additionalInfo = row[additionalInfoIndex] || '';
+                    const storeCode = row[storeCodeIndex] || '';
+                    const storeName = row[storeNameIndex] || '未知門市'; // 預設值，避免空白
                     const ticketName = row[ticketNameIndex];
 
                     // 業務姓名統計
@@ -137,19 +139,8 @@
                         }
                     }
 
-                    // 店組統計
-                    let storeCode = '';
-                    let storeName = '';
-                    const storeCodeMatch = additionalInfo.match(/店組代號.*:\s*(180\d{4})/);
-                    if (storeCodeMatch) {
-                        storeCode = storeCodeMatch[1];
-                    }
-                    const storeNameMatch = additionalInfo.match(/店組代號.*:\s*180\d{4}\s*(.+?)(?=\n|4\.|$)/);
-                    if (storeNameMatch) {
-                        storeName = storeNameMatch[1].trim();
-                    }
-
-                    if (storeCode) {
+                    // 店組統計 (僅處理以 180 開頭的 7 位數代碼)
+                    if (storeCode && storeCode.match(/^180\d{4}$/)) {
                         const key = storeCode + '|' + storeName;
                         if (!storeStats[key]) {
                             storeStats[key] = { 
