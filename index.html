@@ -112,7 +112,7 @@
                 const salesTypes = {
                     '銷售相關問題': 'type1',
                     '(加盟)辦A給B/盜辦/特殊身份辦理爭議': 'type2',
-                    '辦門號換現金': 'type3',
+                    '數位加值服務爭議': 'type3',
                     '二次抱怨銷售相關問題': 'type4'
                 };
 
@@ -126,11 +126,12 @@
                     // 業務姓名統計
                     if (salesName) {
                         if (!salesStats[salesName]) {
-                            salesStats[salesName] = { total: 0, salesCount: 0 };
+                            salesStats[salesName] = { total: 0, salesCount: 0, type1: 0, type2: 0, type3: 0, type4: 0 };
                         }
                         salesStats[salesName].total++;
                         if (ticketName in salesTypes) {
                             salesStats[salesName].salesCount++;
+                            salesStats[salesName][salesTypes[ticketName]]++;
                         }
                     }
 
@@ -174,9 +175,10 @@
                 }
 
                 // 準備業務統計數據 (Sheet1)
-                const salesData = [['業務姓名', '總筆數', '銷售類工單筆數']];
+                const salesData = [['業務姓名', '總筆數', '銷售類工單筆數', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '數位加值服務爭議筆數', '二次抱怨銷售相關問題筆數']];
                 for (const name in salesStats) {
-                    salesData.push([name, salesStats[name].total, salesStats[name].salesCount]);
+                    const item = salesStats[name];
+                    salesData.push([name, item.total, item.salesCount, item.type1, item.type2, item.type3, item.type4]);
                 }
 
                 // 準備店組統計數據 (Sheet2)
@@ -187,7 +189,7 @@
                 }
 
                 // 準備店組分類統計數據 (Sheet3)
-                const storeDetailData = [['店組代號', '加盟門市', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '辦門號換現金筆數', '二次抱怨銷售相關問題筆數']];
+                const storeDetailData = [['店組代號', '加盟門市', '銷售相關問題筆數', '(加盟)辦A給B/盜辦/特殊身份辦理爭議筆數', '數位加值服務爭議筆數', '二次抱怨銷售相關問題筆數']];
                 for (const storeCode in storeDetailStats) {
                     const item = storeDetailStats[storeCode];
                     storeDetailData.push([item.storeCode, item.storeName, item.type1, item.type2, item.type3, item.type4]);
